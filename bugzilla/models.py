@@ -15,6 +15,10 @@ class RemoteObject(RemoteObject_):
         self.post(self)
         return self.api_data['ref']
 
+    def put_to(self, url):
+        self._location = url
+        self.put()
+
     def _get_location(self):
         if self.__location is not None:
             return self.__location
@@ -26,7 +30,6 @@ class RemoteObject(RemoteObject_):
 
     _location = property(_get_location, _set_location)
 
-
 class Bug(RemoteObject):
 
     id = fields.Field()
@@ -37,13 +40,21 @@ class Bug(RemoteObject):
     attachments = fields.List(fields.Object('Attachment'))
     comments = fields.List(fields.Object('Comment'))
     history = fields.List(fields.Object('Changeset'))
+    keywords = fields.List(fields.Object('Keyword'))
     status = fields.Field()
     resolution = fields.Field()
+
+    # TODO: These are Mozilla specific and should be generalized
+    cf_blocking_20 = fields.Field()
+    cf_blocking_fennec = fields.Field()
+    cf_crash_signature = fields.Field()
 
     creation_time = Datetime(DATETIME_FORMAT_WITH_SECONDS)
     flags = fields.List(fields.Object('Flag'))
     blocks = fields.List(fields.Field())
-    depends_on = fields.List(fields.Field())
+    #depends_on = CommaSeparatedBugs(FooLink(fields.Object('Bug')))
+    #depends_on = fields.List(BugLink(fields.Object('Bug')))
+    #depends_on = BugLink(fields.List(fields.Object('Bug')))
     url = fields.Field()
     cc = fields.List(fields.Object('User'))
     keywords = fields.List(fields.Field())
@@ -68,7 +79,7 @@ class Bug(RemoteObject):
     ref = fields.Field()
 
     # Needed for submitting changes.
-    token = fields.Field()
+    token = fields.Field(api_name='update_token')
 
     # Time tracking.
     actual_time = fields.Field()
@@ -82,6 +93,12 @@ class Bug(RemoteObject):
     def __repr__(self):
         return '<Bug %s: "%s">' % (self.id, self.summary)
 
+    def __str__(self):
+        return "[%s] - %s" % (self.id, self.summary)
+
+    def __hash__(self):
+        return self.id
+
 
 class User(RemoteObject):
 
@@ -92,6 +109,14 @@ class User(RemoteObject):
     def __repr__(self):
         return '<User "%s">' % self.real_name
 
+    def __str__(self):
+        return self.real_name or self.name
+
+    def __hash__(self):
+        if not self or not self.name:
+            return 0
+        return self.name.__hash__()
+
 
 class Attachment(RemoteObject):
 
@@ -99,6 +124,7 @@ class Attachment(RemoteObject):
     id = fields.Field()
     attacher = fields.Object('User')
     creation_time = Datetime(DATETIME_FORMAT_WITH_SECONDS)
+    last_change_time = Datetime(DATETIME_FORMAT_WITH_SECONDS)
     description = fields.Field()
     bug_id = fields.Field()
     bug_ref = fields.Field()
@@ -125,11 +151,14 @@ class Attachment(RemoteObject):
     def __repr__(self):
         return '<Attachment %s: "%s">' % (self.id, self.description)
 
+    def __hash__(self):
+        return self.id
+
 
 class Comment(RemoteObject):
 
     id = fields.Field()
-    author = fields.Object('User')
+    author = creator = fields.Object('User')
     creation_time = Datetime(DATETIME_FORMAT_WITH_SECONDS)
     text = fields.Field()
     is_private = StringBoolean()
@@ -137,6 +166,12 @@ class Comment(RemoteObject):
     def __repr__(self):
         return '<Comment by %s on %s>' % (
             self.author, self.creation_time.strftime(DATETIME_FORMAT))
+
+    def __str__(self):
+        return self.text
+
+    def __hash__(self):
+        return self.id
 
 
 class Change(RemoteObject):
@@ -158,7 +193,7 @@ class Changeset(RemoteObject):
 
     def __repr__(self):
         return '<Changeset by %s on %s>' % (
-            self.changer, self.change_time.strptime(DATETIME_FORMAT))
+            self.changer, self.change_time.strftime(DATETIME_FORMAT))
 
 
 class Flag(RemoteObject):
@@ -172,3 +207,30 @@ class Flag(RemoteObject):
 
     def __repr__(self):
         return '<Flag "%s">' % self.name
+
+    def __str__(self):
+        return self.name
+
+    def __hash__(self):
+        return self.id
+
+
+class Keyword(RemoteObject):
+
+    name = fields.Field()
+
+    def __repr__(self):
+        return '<Keyword "%s">' % self.name
+
+    def __str__(self):
+        return self.name
+
+    def __hash__(self):
+        if not self or not self.name:
+            return 0
+        return self.name.__hash__()
+
+
+class BugSearch(RemoteObject):
+    
+    bugs = fields.List(fields.Object('Bug'))
